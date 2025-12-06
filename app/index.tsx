@@ -1,43 +1,82 @@
-import React, { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Alert, AppState, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export default function SayacEkrani() {
-  // --- 1. AYARLAR (STATE) ---
-  const [saniye, setSaniye] = useState(25 * 60); // 25 dakika (saniye cinsinden)
-  const [aktifMi, setAktifMi] = useState(false); // Sayaç çalışıyor mu?
-  const [kategori, setKategori] = useState("Ders Çalışma"); // Seçili kategori
+  // --- 1. AYARLAR ---
+  const [hedefSure, setHedefSure] = useState(25 * 60); 
+  const [saniye, setSaniye] = useState(25 * 60); 
+  const [aktifMi, setAktifMi] = useState(false); 
+  const [kategori, setKategori] = useState("Ders Çalışma"); 
+  const [dagilmaSayisi, setDagilmaSayisi] = useState(0);
 
-  // Kategoriler Listesi
+  const appState = useRef(AppState.currentState);
+
   const kategoriler = ["Ders Çalışma", "Kodlama", "Kitap Okuma", "Proje"];
+  const sureSecenekleri = [1, 25, 45, 60];
 
-  // --- 2. SAYAÇ MANTIĞI ---
+  // --- 2. SAYAÇ MANTIĞI (GÜNCELLENDİ) ---
+  
+  // A) Sadece Sayma İşi
   useEffect(() => {
     let interval: any = null;
-
     if (aktifMi) {
-      // Eğer sayaç aktifse her 1 saniyede bir azalt
       interval = setInterval(() => {
-        setSaniye((oncekiSaniye) => {
-          if (oncekiSaniye <= 0) {
-            clearInterval(interval);
-            setAktifMi(false);
-            Alert.alert("Süre Doldu!", "Tebrikler, odaklanma seansını tamamladın.");
-            return 0;
-          }
-          return oncekiSaniye - 1;
-        });
+        setSaniye((mevcut) => mevcut - 1);
       }, 1000);
-    } else {
-      // Aktif değilse durdur
-      clearInterval(interval);
     }
-
     return () => clearInterval(interval);
   }, [aktifMi]);
 
-  // --- 3. YARDIMCI FONKSİYONLAR ---
-  
-  // Saniyeyi "25:00" formatına çeviren fonksiyon
+  // B) Bitiş Kontrolü (Gözcü) - Saniye 0 olunca burası çalışır
+  useEffect(() => {
+    if (saniye === 0 && aktifMi) {
+      // 1. Sayacı Durdur
+      setAktifMi(false);
+      
+      // 2. Sayacı hemen başa sar (Senin istediğin özellik)
+      setSaniye(hedefSure);
+
+      // 3. POP-UP GÖSTER (Web ve Mobil uyumlu)
+      if (Platform.OS === 'web') {
+        window.alert("TEBRİKLER! 👏\n\nBirinci blok bitti. 5 dakika ara verebilirsin.");
+      } else {
+        Alert.alert(
+          "Harika Gidiyorsun! 👏",
+          "Birinci blok bitti. Şimdi 5 dakika ara verebilirsin.",
+          [{ text: "Tamam, Devam Et" }]
+        );
+      }
+    }
+  }, [saniye, aktifMi, hedefSure]);
+
+
+  // --- 3. DİKKAT DAĞINIKLIĞI TAKİBİ ---
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', nextAppState => {
+      if (appState.current.match(/active/) && (nextAppState === 'background' || nextAppState === 'inactive')) {
+        if (aktifMi) {
+          setAktifMi(false);
+          setDagilmaSayisi(prev => prev + 1);
+          Alert.alert("Dikkat Dağıldı!", "Uygulamadan çıktığınız için sayaç durduruldu.");
+        }
+      }
+      appState.current = nextAppState;
+    });
+    return () => subscription.remove();
+  }, [aktifMi]);
+
+  // --- 4. YARDIMCI FONKSİYONLAR ---
+  const sureyiDegistir = (dakika: number) => {
+    if (aktifMi) {
+      Alert.alert("Hata", "Sayaç çalışırken süreyi değiştiremezsin.");
+      return;
+    }
+    const yeniSaniye = dakika * 60;
+    setHedefSure(yeniSaniye); 
+    setSaniye(yeniSaniye);    
+    setDagilmaSayisi(0);      
+  };
+
   const sureyiFormatla = (toplamSaniye: number) => {
     const dk = Math.floor(toplamSaniye / 60);
     const sn = toplamSaniye % 60;
@@ -46,36 +85,68 @@ export default function SayacEkrani() {
 
   const sayaciSifirla = () => {
     setAktifMi(false);
-    setSaniye(25 * 60); // Tekrar 25 dakikaya döndür
+    setSaniye(hedefSure); 
+    setDagilmaSayisi(0);
   };
 
-  // --- 4. GÖRÜNTÜ (TASARIM) ---
+  // --- 5. GÖRÜNTÜ ---
   return (
     <View style={styles.container}>
       <Text style={styles.baslik}>Odaklanma Takibi</Text>
 
       {/* Kategori Seçimi */}
-      <View style={styles.kategoriKutusu}>
-        <Text style={styles.altBaslik}>Kategori Seç:</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {kategoriler.map((kat) => (
+      <View style={styles.secimSatiri}>
+        <Text style={styles.altBaslik}>Kategori:</Text>
+        <View style={{ height: 50 }}> 
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
+          >
+            {kategoriler.map((kat) => (
+              <TouchableOpacity 
+                key={kat} 
+                style={[styles.miniBtn, kategori === kat && styles.seciliMiniBtn]}
+                onPress={() => setKategori(kat)}
+              >
+                <Text style={[styles.miniBtnYazi, kategori === kat && styles.seciliMiniBtnYazi]}>
+                  {kat}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+
+      {/* Süre Seçimi */}
+      <View style={styles.secimSatiri}>
+        <Text style={styles.altBaslik}>Süre (dk):</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'center' }}> 
+          {sureSecenekleri.map((dk) => (
             <TouchableOpacity 
-              key={kat} 
-              style={[styles.kategoriBtn, kategori === kat && styles.seciliKategoriBtn]}
-              onPress={() => setKategori(kat)}
+              key={dk} 
+              style={[styles.miniBtn, hedefSure === dk * 60 && styles.seciliMiniBtn]}
+              onPress={() => sureyiDegistir(dk)}
             >
-              <Text style={[styles.kategoriYazi, kategori === kat && styles.seciliKategoriYazi]}>
-                {kat}
+              <Text style={[styles.miniBtnYazi, hedefSure === dk * 60 && styles.seciliMiniBtnYazi]}>
+                {dk}
               </Text>
             </TouchableOpacity>
           ))}
-        </ScrollView>
+        </View>
       </View>
 
       {/* Büyük Sayaç */}
       <View style={styles.sayacDaire}>
         <Text style={styles.sayacYazi}>{sureyiFormatla(saniye)}</Text>
         <Text style={styles.durumYazi}>{aktifMi ? "Odaklanılıyor..." : "Hazır"}</Text>
+      </View>
+
+      {/* İstatistik */}
+      <View style={{ marginBottom: 20 }}>
+         <Text style={{ fontSize: 16, color: '#dc3545', fontWeight: 'bold' }}>
+            Dikkat Dağılma Sayısı: {dagilmaSayisi}
+         </Text>
       </View>
 
       {/* Butonlar */}
@@ -95,67 +166,76 @@ export default function SayacEkrani() {
   );
 }
 
-// --- 5. STİL DOSYASI (CSS GİBİ) ---
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
-    alignItems: 'center',
-    paddingTop: 50,
+    alignItems: 'center', 
+    paddingTop: 60,
   },
   baslik: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
+    marginBottom: 30,
+    color: '#333',
+  },
+  secimSatiri: {
+    width: '100%',
     marginBottom: 20,
   },
   altBaslik: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#666',
-    marginBottom: 10,
+    marginBottom: 8,
+    fontWeight: '600',
+    textAlign: 'center',
   },
-  kategoriKutusu: {
-    height: 60,
-    marginBottom: 20,
-    paddingHorizontal: 10,
-  },
-  kategoriBtn: {
-    paddingHorizontal: 20,
+  miniBtn: {
+    paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#f5f5f5',
     borderRadius: 20,
-    marginRight: 10,
-    justifyContent: 'center',
+    marginHorizontal: 5,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    minWidth: 50,
+    alignItems: 'center',
   },
-  seciliKategoriBtn: {
-    backgroundColor: 'tomato', // Seçilince renk değişsin
+  seciliMiniBtn: {
+    backgroundColor: 'tomato',
+    borderColor: 'tomato'
   },
-  kategoriYazi: {
-    color: '#333',
+  miniBtnYazi: {
+    color: '#555',
+    fontSize: 14,
+    fontWeight: '500'
   },
-  seciliKategoriYazi: {
+  seciliMiniBtnYazi: {
     color: '#fff',
     fontWeight: 'bold',
   },
   sayacDaire: {
-    width: 250,
-    height: 250,
-    borderRadius: 125, // Tam daire yapmak için genişliğin yarısı
-    borderWidth: 5,
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+    borderWidth: 4,
     borderColor: 'tomato',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 40,
-    backgroundColor: '#fff5f5',
+    marginBottom: 25,
+    backgroundColor: '#fffafa',
+    marginTop: 10
   },
   sayacYazi: {
-    fontSize: 60,
+    fontSize: 56,
     fontWeight: 'bold',
     color: '#333',
+    fontVariant: ['tabular-nums'], 
   },
   durumYazi: {
-    fontSize: 18,
-    color: '#666',
-    marginTop: 10,
+    fontSize: 16,
+    color: '#888',
+    marginTop: 5,
   },
   butonKutusu: {
     flexDirection: 'row',
@@ -164,20 +244,28 @@ const styles = StyleSheet.create({
   btn: {
     paddingVertical: 15,
     paddingHorizontal: 30,
-    borderRadius: 10,
+    borderRadius: 12,
+    minWidth: 130,
+    alignItems: 'center',
+    elevation: 3, 
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   baslatBtn: {
-    backgroundColor: '#28a745', // Yeşil
+    backgroundColor: '#28a745', 
   },
   durdurBtn: {
-    backgroundColor: '#dc3545', // Kırmızı
+    backgroundColor: '#dc3545', 
   },
   sifirlaBtn: {
-    backgroundColor: '#6c757d', // Gri
+    backgroundColor: '#6c757d', 
   },
   btnYazi: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+    letterSpacing: 1,
   }
 });

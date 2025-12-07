@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, AppState, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+// YENİ: Kayıt dosyamızı içeri alıyoruz
+import { veriyiKaydet } from '../utils/storage';
 
 export default function SayacEkrani() {
-  // --- 1. AYARLAR ---
   const [hedefSure, setHedefSure] = useState(25 * 60); 
   const [saniye, setSaniye] = useState(25 * 60); 
   const [aktifMi, setAktifMi] = useState(false); 
@@ -10,13 +11,10 @@ export default function SayacEkrani() {
   const [dagilmaSayisi, setDagilmaSayisi] = useState(0);
 
   const appState = useRef(AppState.currentState);
-
   const kategoriler = ["Ders Çalışma", "Kodlama", "Kitap Okuma", "Proje"];
-  const sureSecenekleri = [1, 25, 45, 60];
+  const sureSecenekleri = [0.1, 25, 45, 60];
 
-  // --- 2. SAYAÇ MANTIĞI (GÜNCELLENDİ) ---
-  
-  // A) Sadece Sayma İşi
+  // --- SAYAÇ MANTIĞI ---
   useEffect(() => {
     let interval: any = null;
     if (aktifMi) {
@@ -27,30 +25,38 @@ export default function SayacEkrani() {
     return () => clearInterval(interval);
   }, [aktifMi]);
 
-  // B) Bitiş Kontrolü (Gözcü) - Saniye 0 olunca burası çalışır
+  // --- BİTİŞ KONTROLÜ VE KAYIT ---
   useEffect(() => {
     if (saniye === 0 && aktifMi) {
-      // 1. Sayacı Durdur
       setAktifMi(false);
-      
-      // 2. Sayacı hemen başa sar (Senin istediğin özellik)
-      setSaniye(hedefSure);
+      setSaniye(hedefSure); // Başa sar
 
-      // 3. POP-UP GÖSTER (Web ve Mobil uyumlu)
+      // --- 1. VERİLERİ HAZIRLA VE KAYDET ---
+      const yeniKayit = {
+        id: Date.now().toString(), // Benzersiz numara
+        tarih: new Date().toLocaleDateString(), // Bugünün tarihi
+        suredk: hedefSure / 60, // Saniye değil dakika olarak
+        kategori: kategori,
+        dagilma: dagilmaSayisi
+      };
+
+      // Hazırladığımız fonksiyonu çağırıyoruz
+      veriyiKaydet(yeniKayit); 
+      // -------------------------------------
+
       if (Platform.OS === 'web') {
-        window.alert("TEBRİKLER! 👏\n\nBirinci blok bitti. 5 dakika ara verebilirsin.");
+        window.alert("TEBRİKLER! Seans kaydedildi.");
       } else {
         Alert.alert(
           "Harika Gidiyorsun! 👏",
-          "Birinci blok bitti. Şimdi 5 dakika ara verebilirsin.",
+          "Seans başarıyla kaydedildi. 5 dakika ara verebilirsin.",
           [{ text: "Tamam, Devam Et" }]
         );
       }
     }
-  }, [saniye, aktifMi, hedefSure]);
+  }, [saniye, aktifMi, hedefSure]); // Dependencies
 
-
-  // --- 3. DİKKAT DAĞINIKLIĞI TAKİBİ ---
+  // --- DİKKAT DAĞINIKLIĞI ---
   useEffect(() => {
     const subscription = AppState.addEventListener('change', nextAppState => {
       if (appState.current.match(/active/) && (nextAppState === 'background' || nextAppState === 'inactive')) {
@@ -65,7 +71,7 @@ export default function SayacEkrani() {
     return () => subscription.remove();
   }, [aktifMi]);
 
-  // --- 4. YARDIMCI FONKSİYONLAR ---
+  // --- YARDIMCI FONKSİYONLAR ---
   const sureyiDegistir = (dakika: number) => {
     if (aktifMi) {
       Alert.alert("Hata", "Sayaç çalışırken süreyi değiştiremezsin.");
@@ -89,7 +95,6 @@ export default function SayacEkrani() {
     setDagilmaSayisi(0);
   };
 
-  // --- 5. GÖRÜNTÜ ---
   return (
     <View style={styles.container}>
       <Text style={styles.baslik}>Odaklanma Takibi</Text>
@@ -168,104 +173,48 @@ export default function SayacEkrani() {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center', 
-    paddingTop: 60,
+    flex: 1, backgroundColor: '#fff', alignItems: 'center', paddingTop: 60,
   },
   baslik: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 30,
-    color: '#333',
+    fontSize: 28, fontWeight: 'bold', marginBottom: 30, color: '#333',
   },
   secimSatiri: {
-    width: '100%',
-    marginBottom: 20,
+    width: '100%', marginBottom: 20,
   },
   altBaslik: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 8,
-    fontWeight: '600',
-    textAlign: 'center',
+    fontSize: 14, color: '#666', marginBottom: 8, fontWeight: '600', textAlign: 'center',
   },
   miniBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 20,
-    marginHorizontal: 5,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    minWidth: 50,
-    alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#f5f5f5', borderRadius: 20, marginHorizontal: 5, borderWidth: 1, borderColor: '#e0e0e0', minWidth: 50, alignItems: 'center',
   },
   seciliMiniBtn: {
-    backgroundColor: 'tomato',
-    borderColor: 'tomato'
+    backgroundColor: 'tomato', borderColor: 'tomato'
   },
   miniBtnYazi: {
-    color: '#555',
-    fontSize: 14,
-    fontWeight: '500'
+    color: '#555', fontSize: 14, fontWeight: '500'
   },
   seciliMiniBtnYazi: {
-    color: '#fff',
-    fontWeight: 'bold',
+    color: '#fff', fontWeight: 'bold',
   },
   sayacDaire: {
-    width: 240,
-    height: 240,
-    borderRadius: 120,
-    borderWidth: 4,
-    borderColor: 'tomato',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 25,
-    backgroundColor: '#fffafa',
-    marginTop: 10
+    width: 240, height: 240, borderRadius: 120, borderWidth: 4, borderColor: 'tomato', justifyContent: 'center', alignItems: 'center', marginBottom: 25, backgroundColor: '#fffafa', marginTop: 10
   },
   sayacYazi: {
-    fontSize: 56,
-    fontWeight: 'bold',
-    color: '#333',
-    fontVariant: ['tabular-nums'], 
+    fontSize: 56, fontWeight: 'bold', color: '#333', fontVariant: ['tabular-nums'], 
   },
   durumYazi: {
-    fontSize: 16,
-    color: '#888',
-    marginTop: 5,
+    fontSize: 16, color: '#888', marginTop: 5,
   },
   butonKutusu: {
-    flexDirection: 'row',
-    gap: 20,
+    flexDirection: 'row', gap: 20,
   },
   btn: {
-    paddingVertical: 15,
-    paddingHorizontal: 30,
-    borderRadius: 12,
-    minWidth: 130,
-    alignItems: 'center',
-    elevation: 3, 
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    paddingVertical: 15, paddingHorizontal: 30, borderRadius: 12, minWidth: 130, alignItems: 'center', elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4,
   },
-  baslatBtn: {
-    backgroundColor: '#28a745', 
-  },
-  durdurBtn: {
-    backgroundColor: '#dc3545', 
-  },
-  sifirlaBtn: {
-    backgroundColor: '#6c757d', 
-  },
+  baslatBtn: { backgroundColor: '#28a745' },
+  durdurBtn: { backgroundColor: '#dc3545' },
+  sifirlaBtn: { backgroundColor: '#6c757d' },
   btnYazi: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-    letterSpacing: 1,
+    color: '#fff', fontSize: 16, fontWeight: 'bold', letterSpacing: 1,
   }
 });

@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, AppState, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-// YENİ: Kayıt dosyamızı içeri alıyoruz
 import { veriyiKaydet } from '../utils/storage';
 
 export default function SayacEkrani() {
@@ -25,24 +24,26 @@ export default function SayacEkrani() {
     return () => clearInterval(interval);
   }, [aktifMi]);
 
-  // --- BİTİŞ KONTROLÜ VE KAYIT ---
+  // --- BİTİŞ KONTROLÜ (DÜZELTİLEN KISIM) ---
   useEffect(() => {
     if (saniye === 0 && aktifMi) {
       setAktifMi(false);
       setSaniye(hedefSure); // Başa sar
 
-      // --- 1. VERİLERİ HAZIRLA VE KAYDET ---
+      // --- 1. VERİLERİ KAYDET ---
       const yeniKayit = {
-        id: Date.now().toString(), // Benzersiz numara
-        tarih: new Date().toLocaleDateString(), // Bugünün tarihi
-        suredk: hedefSure / 60, // Saniye değil dakika olarak
+        id: Date.now().toString(),
+        tarih: new Date().toLocaleDateString(),
+        suredk: hedefSure / 60,
         kategori: kategori,
-        dagilma: dagilmaSayisi
+        dagilma: dagilmaSayisi // O anki dağılma sayısını kaydet
       };
 
-      // Hazırladığımız fonksiyonu çağırıyoruz
       veriyiKaydet(yeniKayit); 
-      // -------------------------------------
+      
+      // --- 2. DAĞILMA SAYISINI SIFIRLA (BUG ÇÖZÜMÜ) ---
+      setDagilmaSayisi(0); // <--- İşte eksik olan kod burasıydı!
+      // ------------------------------------------------
 
       if (Platform.OS === 'web') {
         window.alert("TEBRİKLER! Seans kaydedildi.");
@@ -54,7 +55,7 @@ export default function SayacEkrani() {
         );
       }
     }
-  }, [saniye, aktifMi, hedefSure]); // Dependencies
+  }, [saniye, aktifMi, hedefSure]); 
 
   // --- DİKKAT DAĞINIKLIĞI ---
   useEffect(() => {

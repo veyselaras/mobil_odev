@@ -1,19 +1,36 @@
+import { useKeepAwake } from 'expo-keep-awake'; // Ekran kapanmasın diye
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, AppState, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+	Alert,
+	AppState,
+	Modal,
+	ScrollView, StyleSheet, Text, TouchableOpacity,
+	Vibration // Modal ve Vibration eklendi
+	,
+
+
+	View
+} from 'react-native';
 import { veriyiKaydet } from '../utils/storage';
 
 export default function SayacEkrani() {
+  // --- 1. AYARLAR ---
+  useKeepAwake(); // Uygulama açıkken ekranın kapanmasını engeller
+
   const [hedefSure, setHedefSure] = useState(25 * 60); 
   const [saniye, setSaniye] = useState(25 * 60); 
   const [aktifMi, setAktifMi] = useState(false); 
   const [kategori, setKategori] = useState("Ders Çalışma"); 
   const [dagilmaSayisi, setDagilmaSayisi] = useState(0);
 
+  // Modal (Özet Ekranı) Kontrolü
+  const [modalAcik, setModalAcik] = useState(false);
+
   const appState = useRef(AppState.currentState);
   const kategoriler = ["Ders Çalışma", "Kodlama", "Kitap Okuma", "Proje"];
   const sureSecenekleri = [0.1, 25, 45, 60];
 
-  // --- SAYAÇ MANTIĞI ---
+  // --- 2. SAYAÇ MANTIĞI ---
   useEffect(() => {
     let interval: any = null;
     if (aktifMi) {
@@ -24,38 +41,36 @@ export default function SayacEkrani() {
     return () => clearInterval(interval);
   }, [aktifMi]);
 
-  // --- BİTİŞ KONTROLÜ (DÜZELTİLEN KISIM) ---
+  // --- BİTİŞ KONTROLÜ ---
   useEffect(() => {
     if (saniye === 0 && aktifMi) {
       setAktifMi(false);
-      setSaniye(hedefSure); // Başa sar
-
-      // --- 1. VERİLERİ KAYDET ---
-      const yeniKayit = {
-        id: Date.now().toString(),
-        tarih: new Date().toLocaleDateString(),
-        suredk: hedefSure / 60,
-        kategori: kategori,
-        dagilma: dagilmaSayisi // O anki dağılma sayısını kaydet
-      };
-
-      veriyiKaydet(yeniKayit); 
       
-      // --- 2. DAĞILMA SAYISINI SIFIRLA (BUG ÇÖZÜMÜ) ---
-      setDagilmaSayisi(0); // <--- İşte eksik olan kod burasıydı!
-      // ------------------------------------------------
+      // A. Titreşim (Telefonu 1 saniye titret)
+      Vibration.vibrate(1000);
 
-      if (Platform.OS === 'web') {
-        window.alert("TEBRİKLER! Seans kaydedildi.");
-      } else {
-        Alert.alert(
-          "Harika Gidiyorsun! 👏",
-          "Seans başarıyla kaydedildi. 5 dakika ara verebilirsin.",
-          [{ text: "Tamam, Devam Et" }]
-        );
-      }
+      // B. Modal'ı Aç (Özet Ekranını Göster)
+      setModalAcik(true);
     }
-  }, [saniye, aktifMi, hedefSure]); 
+  }, [saniye, aktifMi]); 
+
+  // --- VERİYİ KAYDETME VE KAPATMA FONKSİYONU ---
+  const seansiBitirVeKaydet = () => {
+    // 1. Veriyi Kaydet
+    const yeniKayit = {
+      id: Date.now().toString(),
+      tarih: new Date().toLocaleDateString(),
+      suredk: hedefSure / 60,
+      kategori: kategori,
+      dagilma: dagilmaSayisi
+    };
+    veriyiKaydet(yeniKayit);
+
+    // 2. Ortalığı Topla
+    setModalAcik(false); // Pencereyi kapat
+    setSaniye(hedefSure); // Sayacı başa sar
+    setDagilmaSayisi(0);  // İstatistiği sıfırla
+  };
 
   // --- DİKKAT DAĞINIKLIĞI ---
   useEffect(() => {
@@ -64,6 +79,8 @@ export default function SayacEkrani() {
         if (aktifMi) {
           setAktifMi(false);
           setDagilmaSayisi(prev => prev + 1);
+          // Burada Alert yerine kullanıcı geri dönünce fark etsin diye bekleyebiliriz
+          // Ama hoca anlık uyarı istemiş olabilir, Alert kalabilir.
           Alert.alert("Dikkat Dağıldı!", "Uygulamadan çıktığınız için sayaç durduruldu.");
         }
       }
@@ -99,6 +116,43 @@ export default function SayacEkrani() {
   return (
     <View style={styles.container}>
       <Text style={styles.baslik}>Odaklanma Takibi</Text>
+
+      {/* --- SEANS ÖZETİ MODAL PENCERESİ (YENİ) --- */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={modalAcik}
+        onRequestClose={() => seansiBitirVeKaydet()}
+      >
+        <View style={styles.modalArkaPlan}>
+          <View style={styles.modalKutu}>
+            <Text style={styles.modalBaslik}>🎉 Seans Tamamlandı!</Text>
+            
+            <View style={styles.ozetSatir}>
+              <Text style={styles.ozetEtiket}>Kategori:</Text>
+              <Text style={styles.ozetDeger}>{kategori}</Text>
+            </View>
+
+            <View style={styles.ozetSatir}>
+              <Text style={styles.ozetEtiket}>Odaklanma Süresi:</Text>
+              <Text style={styles.ozetDeger}>{hedefSure / 60} dk</Text>
+            </View>
+
+            <View style={styles.ozetSatir}>
+              <Text style={styles.ozetEtiket}>Dikkat Dağılma:</Text>
+              <Text style={[styles.ozetDeger, { color: dagilmaSayisi > 0 ? 'red' : 'green' }]}>
+                {dagilmaSayisi} kere
+              </Text>
+            </View>
+
+            <TouchableOpacity style={styles.modalButon} onPress={seansiBitirVeKaydet}>
+              <Text style={styles.modalButonYazi}>Kaydet ve Bitir</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ... (Geri kalan tasarım aynı) ... */}
 
       {/* Kategori Seçimi */}
       <View style={styles.secimSatiri}>
@@ -173,12 +227,40 @@ export default function SayacEkrani() {
 }
 
 const styles = StyleSheet.create({
+  // ... Eski stiller aynen kalıyor, sadece Modal stilleri eklendi ...
   container: {
     flex: 1, backgroundColor: '#fff', alignItems: 'center', paddingTop: 60,
   },
   baslik: {
     fontSize: 28, fontWeight: 'bold', marginBottom: 30, color: '#333',
   },
+  // --- MODAL STİLLERİ ---
+  modalArkaPlan: {
+    flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)"
+  },
+  modalKutu: {
+    width: 300, backgroundColor: "white", borderRadius: 20, padding: 25, alignItems: "center",
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4, elevation: 5
+  },
+  modalBaslik: {
+    fontSize: 22, fontWeight: "bold", marginBottom: 20, color: '#28a745'
+  },
+  ozetSatir: {
+    flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 10, borderBottomWidth: 1, borderBottomColor: '#eee', paddingBottom: 5
+  },
+  ozetEtiket: {
+    fontSize: 16, color: '#555', fontWeight: '600'
+  },
+  ozetDeger: {
+    fontSize: 16, color: '#333', fontWeight: 'bold'
+  },
+  modalButon: {
+    backgroundColor: "tomato", borderRadius: 10, padding: 12, elevation: 2, marginTop: 15, width: '100%', alignItems: 'center'
+  },
+  modalButonYazi: {
+    color: "white", fontWeight: "bold", fontSize: 16
+  },
+  // --- MEVCUT STİLLER ---
   secimSatiri: {
     width: '100%', marginBottom: 20,
   },

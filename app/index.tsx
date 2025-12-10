@@ -1,36 +1,61 @@
-import { useKeepAwake } from 'expo-keep-awake'; // Ekran kapanmasın diye
+import { Audio } from 'expo-av'; // SES KÜTÜPHANESİ EKLENDİ
+import { useKeepAwake } from 'expo-keep-awake';
 import React, { useEffect, useRef, useState } from 'react';
 import {
 	Alert,
 	AppState,
 	Modal,
 	ScrollView, StyleSheet, Text, TouchableOpacity,
-	Vibration // Modal ve Vibration eklendi
-	,
-
-
+	Vibration,
 	View
 } from 'react-native';
 import { veriyiKaydet } from '../utils/storage';
 
 export default function SayacEkrani() {
-  // --- 1. AYARLAR ---
-  useKeepAwake(); // Uygulama açıkken ekranın kapanmasını engeller
+  useKeepAwake(); 
 
   const [hedefSure, setHedefSure] = useState(25 * 60); 
   const [saniye, setSaniye] = useState(25 * 60); 
   const [aktifMi, setAktifMi] = useState(false); 
   const [kategori, setKategori] = useState("Ders Çalışma"); 
   const [dagilmaSayisi, setDagilmaSayisi] = useState(0);
-
-  // Modal (Özet Ekranı) Kontrolü
   const [modalAcik, setModalAcik] = useState(false);
+  
+  // SES NESNESİ (Referans olarak tutuyoruz)
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
 
   const appState = useRef(AppState.currentState);
   const kategoriler = ["Ders Çalışma", "Kodlama", "Kitap Okuma", "Proje"];
   const sureSecenekleri = [0.1, 25, 45, 60];
 
-  // --- 2. SAYAÇ MANTIĞI ---
+  // --- SES ÇALMA FONKSİYONU ---
+  async function sesCal() {
+    try {
+      console.log('Ses yükleniyor...');
+      // İnternetten basit bir bildirim sesi çekiyoruz
+      const { sound } = await Audio.Sound.createAsync(
+         { uri: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3' }
+      );
+      setSound(sound);
+
+      console.log('Ses çalınıyor...');
+      await sound.playAsync(); 
+    } catch (error) {
+      console.log("Ses çalma hatası:", error);
+    }
+  }
+
+  // Ses nesnesini temizlemek için (Performans)
+  useEffect(() => {
+    return sound
+      ? () => {
+          console.log('Ses temizleniyor...');
+          sound.unloadAsync();
+        }
+      : undefined;
+  }, [sound]);
+
+  // --- SAYAÇ MANTIĞI ---
   useEffect(() => {
     let interval: any = null;
     if (aktifMi) {
@@ -46,17 +71,18 @@ export default function SayacEkrani() {
     if (saniye === 0 && aktifMi) {
       setAktifMi(false);
       
-      // A. Titreşim (Telefonu 1 saniye titret)
+      // 1. Titreşim
       Vibration.vibrate(1000);
+      
+      // 2. SESİ ÇAL (YENİ)
+      sesCal();
 
-      // B. Modal'ı Aç (Özet Ekranını Göster)
+      // 3. Modalı Aç
       setModalAcik(true);
     }
   }, [saniye, aktifMi]); 
 
-  // --- VERİYİ KAYDETME VE KAPATMA FONKSİYONU ---
   const seansiBitirVeKaydet = () => {
-    // 1. Veriyi Kaydet
     const yeniKayit = {
       id: Date.now().toString(),
       tarih: new Date().toLocaleDateString(),
@@ -66,10 +92,9 @@ export default function SayacEkrani() {
     };
     veriyiKaydet(yeniKayit);
 
-    // 2. Ortalığı Topla
-    setModalAcik(false); // Pencereyi kapat
-    setSaniye(hedefSure); // Sayacı başa sar
-    setDagilmaSayisi(0);  // İstatistiği sıfırla
+    setModalAcik(false); 
+    setSaniye(hedefSure); 
+    setDagilmaSayisi(0);  
   };
 
   // --- DİKKAT DAĞINIKLIĞI ---
@@ -79,8 +104,6 @@ export default function SayacEkrani() {
         if (aktifMi) {
           setAktifMi(false);
           setDagilmaSayisi(prev => prev + 1);
-          // Burada Alert yerine kullanıcı geri dönünce fark etsin diye bekleyebiliriz
-          // Ama hoca anlık uyarı istemiş olabilir, Alert kalabilir.
           Alert.alert("Dikkat Dağıldı!", "Uygulamadan çıktığınız için sayaç durduruldu.");
         }
       }
@@ -117,7 +140,7 @@ export default function SayacEkrani() {
     <View style={styles.container}>
       <Text style={styles.baslik}>Odaklanma Takibi</Text>
 
-      {/* --- SEANS ÖZETİ MODAL PENCERESİ (YENİ) --- */}
+      {/* MODAL PENCERESİ */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -151,8 +174,6 @@ export default function SayacEkrani() {
           </View>
         </View>
       </Modal>
-
-      {/* ... (Geri kalan tasarım aynı) ... */}
 
       {/* Kategori Seçimi */}
       <View style={styles.secimSatiri}>
@@ -227,14 +248,12 @@ export default function SayacEkrani() {
 }
 
 const styles = StyleSheet.create({
-  // ... Eski stiller aynen kalıyor, sadece Modal stilleri eklendi ...
   container: {
     flex: 1, backgroundColor: '#fff', alignItems: 'center', paddingTop: 60,
   },
   baslik: {
     fontSize: 28, fontWeight: 'bold', marginBottom: 30, color: '#333',
   },
-  // --- MODAL STİLLERİ ---
   modalArkaPlan: {
     flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)"
   },
@@ -260,7 +279,6 @@ const styles = StyleSheet.create({
   modalButonYazi: {
     color: "white", fontWeight: "bold", fontSize: 16
   },
-  // --- MEVCUT STİLLER ---
   secimSatiri: {
     width: '100%', marginBottom: 20,
   },

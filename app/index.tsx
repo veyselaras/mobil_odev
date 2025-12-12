@@ -1,10 +1,9 @@
-import { Audio } from 'expo-av'; // SES KÜTÜPHANESİ EKLENDİ
+import Slider from '@react-native-community/slider'; // YENİ EKLENEN
+import { Audio } from 'expo-av';
 import { useKeepAwake } from 'expo-keep-awake';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-	Alert,
-	AppState,
-	Modal,
+	AppState, Modal,
 	ScrollView, StyleSheet, Text, TouchableOpacity,
 	Vibration,
 	View
@@ -14,46 +13,49 @@ import { veriyiKaydet } from '../utils/storage';
 export default function SayacEkrani() {
   useKeepAwake(); 
 
+  // Slider için varsayılan değer (dk cinsinden)
+  const [secilenDakika, setSecilenDakika] = useState(25); 
+
   const [hedefSure, setHedefSure] = useState(25 * 60); 
   const [saniye, setSaniye] = useState(25 * 60); 
   const [aktifMi, setAktifMi] = useState(false); 
   const [kategori, setKategori] = useState("Ders Çalışma"); 
   const [dagilmaSayisi, setDagilmaSayisi] = useState(0);
   const [modalAcik, setModalAcik] = useState(false);
-  
-  // SES NESNESİ (Referans olarak tutuyoruz)
   const [sound, setSound] = useState<Audio.Sound | null>(null);
 
   const appState = useRef(AppState.currentState);
   const kategoriler = ["Ders Çalışma", "Kodlama", "Kitap Okuma", "Proje"];
-  const sureSecenekleri = [0.1, 25, 45, 60];
 
-  // --- SES ÇALMA FONKSİYONU ---
+  // --- SES FONKSİYONLARI ---
   async function sesCal() {
     try {
-      console.log('Ses yükleniyor...');
-      // İnternetten basit bir bildirim sesi çekiyoruz
       const { sound } = await Audio.Sound.createAsync(
          { uri: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3' }
       );
       setSound(sound);
-
-      console.log('Ses çalınıyor...');
       await sound.playAsync(); 
     } catch (error) {
-      console.log("Ses çalma hatası:", error);
+      console.log("Ses hatası:", error);
     }
   }
 
-  // Ses nesnesini temizlemek için (Performans)
   useEffect(() => {
-    return sound
-      ? () => {
-          console.log('Ses temizleniyor...');
-          sound.unloadAsync();
-        }
-      : undefined;
+    return sound ? () => { sound.unloadAsync(); } : undefined;
   }, [sound]);
+
+  // --- SLIDER DEĞİŞİMİ ---
+  const sliderDegisti = (deger: number) => {
+    if (aktifMi) return; // Sayaç çalışırken değiştirmesin
+    
+    // Slider bize 25.44 gibi küsuratlı verebilir, tam sayı yapıyoruz
+    const tamSayiDakika = Math.floor(deger);
+    
+    setSecilenDakika(tamSayiDakika); // Ekranda görünen sayı (dk)
+    setHedefSure(tamSayiDakika * 60); // Arka plandaki hedef (sn)
+    setSaniye(tamSayiDakika * 60);    // Anlık sayaç (sn)
+    setDagilmaSayisi(0);
+  };
 
   // --- SAYAÇ MANTIĞI ---
   useEffect(() => {
@@ -70,14 +72,8 @@ export default function SayacEkrani() {
   useEffect(() => {
     if (saniye === 0 && aktifMi) {
       setAktifMi(false);
-      
-      // 1. Titreşim
       Vibration.vibrate(1000);
-      
-      // 2. SESİ ÇAL (YENİ)
       sesCal();
-
-      // 3. Modalı Aç
       setModalAcik(true);
     }
   }, [saniye, aktifMi]); 
@@ -91,7 +87,6 @@ export default function SayacEkrani() {
       dagilma: dagilmaSayisi
     };
     veriyiKaydet(yeniKayit);
-
     setModalAcik(false); 
     setSaniye(hedefSure); 
     setDagilmaSayisi(0);  
@@ -104,7 +99,7 @@ export default function SayacEkrani() {
         if (aktifMi) {
           setAktifMi(false);
           setDagilmaSayisi(prev => prev + 1);
-          Alert.alert("Dikkat Dağıldı!", "Uygulamadan çıktığınız için sayaç durduruldu.");
+          // Alert.alert("Dikkat!", "Uygulamadan çıktınız."); // İstersen açabilirsin
         }
       }
       appState.current = nextAppState;
@@ -112,18 +107,7 @@ export default function SayacEkrani() {
     return () => subscription.remove();
   }, [aktifMi]);
 
-  // --- YARDIMCI FONKSİYONLAR ---
-  const sureyiDegistir = (dakika: number) => {
-    if (aktifMi) {
-      Alert.alert("Hata", "Sayaç çalışırken süreyi değiştiremezsin.");
-      return;
-    }
-    const yeniSaniye = dakika * 60;
-    setHedefSure(yeniSaniye); 
-    setSaniye(yeniSaniye);    
-    setDagilmaSayisi(0);      
-  };
-
+  // --- YARDIMCI ---
   const sureyiFormatla = (toplamSaniye: number) => {
     const dk = Math.floor(toplamSaniye / 60);
     const sn = toplamSaniye % 60;
@@ -140,7 +124,7 @@ export default function SayacEkrani() {
     <View style={styles.container}>
       <Text style={styles.baslik}>Odaklanma Takibi</Text>
 
-      {/* MODAL PENCERESİ */}
+      {/* MODAL */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -150,24 +134,7 @@ export default function SayacEkrani() {
         <View style={styles.modalArkaPlan}>
           <View style={styles.modalKutu}>
             <Text style={styles.modalBaslik}>🎉 Seans Tamamlandı!</Text>
-            
-            <View style={styles.ozetSatir}>
-              <Text style={styles.ozetEtiket}>Kategori:</Text>
-              <Text style={styles.ozetDeger}>{kategori}</Text>
-            </View>
-
-            <View style={styles.ozetSatir}>
-              <Text style={styles.ozetEtiket}>Odaklanma Süresi:</Text>
-              <Text style={styles.ozetDeger}>{hedefSure / 60} dk</Text>
-            </View>
-
-            <View style={styles.ozetSatir}>
-              <Text style={styles.ozetEtiket}>Dikkat Dağılma:</Text>
-              <Text style={[styles.ozetDeger, { color: dagilmaSayisi > 0 ? 'red' : 'green' }]}>
-                {dagilmaSayisi} kere
-              </Text>
-            </View>
-
+            <Text style={styles.ozetDeger}>{kategori} - {Math.floor(hedefSure / 60)} dk</Text>
             <TouchableOpacity style={styles.modalButon} onPress={seansiBitirVeKaydet}>
               <Text style={styles.modalButonYazi}>Kaydet ve Bitir</Text>
             </TouchableOpacity>
@@ -175,7 +142,7 @@ export default function SayacEkrani() {
         </View>
       </Modal>
 
-      {/* Kategori Seçimi */}
+      {/* KATEGORİ SEÇİMİ */}
       <View style={styles.secimSatiri}>
         <Text style={styles.altBaslik}>Kategori:</Text>
         <View style={{ height: 50 }}> 
@@ -199,38 +166,42 @@ export default function SayacEkrani() {
         </View>
       </View>
 
-      {/* Süre Seçimi */}
-      <View style={styles.secimSatiri}>
-        <Text style={styles.altBaslik}>Süre (dk):</Text>
-        <View style={{ flexDirection: 'row', justifyContent: 'center' }}> 
-          {sureSecenekleri.map((dk) => (
-            <TouchableOpacity 
-              key={dk} 
-              style={[styles.miniBtn, hedefSure === dk * 60 && styles.seciliMiniBtn]}
-              onPress={() => sureyiDegistir(dk)}
-            >
-              <Text style={[styles.miniBtnYazi, hedefSure === dk * 60 && styles.seciliMiniBtnYazi]}>
-                {dk}
-              </Text>
-            </TouchableOpacity>
-          ))}
+      {/* --- YENİ: SLIDER İLE SÜRE AYARLAMA --- */}
+      <View style={styles.sliderKutusu}>
+        <Text style={styles.altBaslik}>Süre Ayarla: <Text style={{ color: 'tomato', fontWeight: 'bold' }}>{secilenDakika} dk</Text></Text>
+        
+        <Slider
+          style={{ width: '100%', height: 40 }}
+          minimumValue={1}      // En az 1 dakika
+          maximumValue={120}    // En fazla 120 dakika
+          step={1}              // 1'er 1'er artsın
+          value={secilenDakika} // Şu anki değer
+          onValueChange={sliderDegisti} // Kaydırınca çalışacak fonksiyon
+          minimumTrackTintColor="tomato" // Sol taraf rengi
+          maximumTrackTintColor="#d3d3d3" // Sağ taraf rengi
+          thumbTintColor="tomato" // Yuvarlak başlık rengi
+          disabled={aktifMi} // Sayaç çalışırken kilitlensin
+        />
+        
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <Text style={{ fontSize: 12, color: '#999' }}>1 dk</Text>
+            <Text style={{ fontSize: 12, color: '#999' }}>120 dk</Text>
         </View>
       </View>
 
-      {/* Büyük Sayaç */}
+      {/* BÜYÜK SAYAÇ */}
       <View style={styles.sayacDaire}>
         <Text style={styles.sayacYazi}>{sureyiFormatla(saniye)}</Text>
         <Text style={styles.durumYazi}>{aktifMi ? "Odaklanılıyor..." : "Hazır"}</Text>
       </View>
 
-      {/* İstatistik */}
       <View style={{ marginBottom: 20 }}>
          <Text style={{ fontSize: 16, color: '#dc3545', fontWeight: 'bold' }}>
-            Dikkat Dağılma Sayısı: {dagilmaSayisi}
+            Dikkat Dağılma: {dagilmaSayisi}
          </Text>
       </View>
 
-      {/* Butonlar */}
+      {/* BUTONLAR */}
       <View style={styles.butonKutusu}>
         <TouchableOpacity 
           style={[styles.btn, aktifMi ? styles.durdurBtn : styles.baslatBtn]} 
@@ -249,32 +220,35 @@ export default function SayacEkrani() {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1, backgroundColor: '#fff', alignItems: 'center', paddingTop: 60,
+    flex: 1, backgroundColor: '#fff', alignItems: 'center', paddingTop: 60, paddingHorizontal: 20
   },
   baslik: {
-    fontSize: 28, fontWeight: 'bold', marginBottom: 30, color: '#333',
+    fontSize: 28, fontWeight: 'bold', marginBottom: 20, color: '#333',
+  },
+  // SLIDER STİLİ
+  sliderKutusu: {
+    width: '100%',
+    backgroundColor: '#f9f9f9',
+    padding: 15,
+    borderRadius: 15,
+    marginBottom: 30, // Sayaç ile arayı açtık
+    borderWidth: 1,
+    borderColor: '#eee'
   },
   modalArkaPlan: {
     flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)"
   },
   modalKutu: {
-    width: 300, backgroundColor: "white", borderRadius: 20, padding: 25, alignItems: "center",
-    shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4, elevation: 5
+    width: 300, backgroundColor: "white", borderRadius: 20, padding: 25, alignItems: "center", shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4, elevation: 5
   },
   modalBaslik: {
-    fontSize: 22, fontWeight: "bold", marginBottom: 20, color: '#28a745'
-  },
-  ozetSatir: {
-    flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 10, borderBottomWidth: 1, borderBottomColor: '#eee', paddingBottom: 5
-  },
-  ozetEtiket: {
-    fontSize: 16, color: '#555', fontWeight: '600'
+    fontSize: 22, fontWeight: "bold", marginBottom: 10, color: '#28a745'
   },
   ozetDeger: {
-    fontSize: 16, color: '#333', fontWeight: 'bold'
+    fontSize: 18, color: '#333', marginBottom: 20
   },
   modalButon: {
-    backgroundColor: "tomato", borderRadius: 10, padding: 12, elevation: 2, marginTop: 15, width: '100%', alignItems: 'center'
+    backgroundColor: "tomato", borderRadius: 10, padding: 12, elevation: 2, width: '100%', alignItems: 'center'
   },
   modalButonYazi: {
     color: "white", fontWeight: "bold", fontSize: 16
@@ -283,7 +257,7 @@ const styles = StyleSheet.create({
     width: '100%', marginBottom: 20,
   },
   altBaslik: {
-    fontSize: 14, color: '#666', marginBottom: 8, fontWeight: '600', textAlign: 'center',
+    fontSize: 14, color: '#666', marginBottom: 8, fontWeight: '600',
   },
   miniBtn: {
     paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#f5f5f5', borderRadius: 20, marginHorizontal: 5, borderWidth: 1, borderColor: '#e0e0e0', minWidth: 50, alignItems: 'center',

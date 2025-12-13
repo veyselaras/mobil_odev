@@ -5,14 +5,14 @@ import { BarChart, PieChart } from 'react-native-chart-kit';
 import { herseyiSil, OdakVerisi, verileriGetir } from '../utils/storage';
 
 const ekranGenisligi = Dimensions.get("window").width;
+const GUNLUK_HEDEF_DK = 120; // Hedef: Günde 2 Saat (Burayı değiştirebilirsin)
 
-// Zaman Filtresi Seçenekleri
 type ZamanAraligi = 'Bugün' | 'Bu Hafta' | 'Bu Ay';
 
 export default function RaporlarEkrani() {
-  const [hamVeriler, setHamVeriler] = useState<OdakVerisi[]>([]); // Veritabanından gelen tüm veri
-  const [gosterilenVeriler, setGosterilenVeriler] = useState<OdakVerisi[]>([]); // Ekranda süzülen veri
-  const [seciliFiltre, setSeciliFiltre] = useState<ZamanAraligi>('Bugün'); // Varsayılan: Bugün
+  const [hamVeriler, setHamVeriler] = useState<OdakVerisi[]>([]);
+  const [gosterilenVeriler, setGosterilenVeriler] = useState<OdakVerisi[]>([]);
+  const [seciliFiltre, setSeciliFiltre] = useState<ZamanAraligi>('Bugün');
   const [yukleniyor, setYukleniyor] = useState(false);
 
   // --- 1. VERİLERİ YÜKLEME ---
@@ -26,50 +26,39 @@ export default function RaporlarEkrani() {
     setYukleniyor(true);
     const gelen = await verileriGetir();
     setHamVeriler(gelen);
-    // Veriler yüklenince hemen mevcut filtreye göre süz
     verileriSuz(gelen, seciliFiltre);
     setYukleniyor(false);
   };
 
-  // --- 2. FİLTRELEME MANTIĞI (SİHİRLİ KISIM) ---
+  // --- 2. FİLTRELEME ---
   const verileriSuz = (veriler: OdakVerisi[], filtre: ZamanAraligi) => {
     const bugun = new Date();
-    bugun.setHours(0, 0, 0, 0); // Bugünün başlangıcı (Gece 00:00)
+    bugun.setHours(0, 0, 0, 0); 
 
     const suzulen = veriler.filter(veri => {
-      // Kayıt yaparken ID olarak Date.now() kullanmıştık.
-      // Bunu tekrar tarihe çeviriyoruz. En güvenli yöntem budur.
       const kayitTarihi = new Date(parseInt(veri.id)); 
       kayitTarihi.setHours(0, 0, 0, 0);
 
-      if (filtre === 'Bugün') {
-        // Tarih bugüne eşitse
-        return kayitTarihi.getTime() === bugun.getTime();
-      } 
+      if (filtre === 'Bugün') return kayitTarihi.getTime() === bugun.getTime();
       else if (filtre === 'Bu Hafta') {
-        // Son 7 gün
         const birHaftaOnce = new Date(bugun);
         birHaftaOnce.setDate(bugun.getDate() - 7);
         return kayitTarihi >= birHaftaOnce;
       } 
       else { 
-        // Bu Ay (Son 30 gün)
         const birAyOnce = new Date(bugun);
         birAyOnce.setDate(bugun.getDate() - 30);
         return kayitTarihi >= birAyOnce;
       }
     });
-
     setGosterilenVeriler(suzulen);
   };
 
-  // Kullanıcı butona basınca burası çalışır
   const filtreDegistir = (yeniFiltre: ZamanAraligi) => {
     setSeciliFiltre(yeniFiltre);
     verileriSuz(hamVeriler, yeniFiltre);
   };
 
-  // --- 3. TEMİZLEME ---
   const verileriTemizle = async () => {
     Alert.alert(
       "Verileri Sil",
@@ -90,12 +79,23 @@ export default function RaporlarEkrani() {
     );
   };
 
-  // --- 4. İSTATİSTİK HESAPLAMALARI (Sadece 'gosterilenVeriler' kullanılır) ---
+  // --- 3. İSTATİSTİK HESAPLAMALARI ---
   const toplamSure = Math.ceil(gosterilenVeriler.reduce((toplam, veri) => toplam + veri.suredk, 0));
   const toplamDagilma = gosterilenVeriler.reduce((toplam, veri) => toplam + veri.dagilma, 0);
   const toplamSeans = gosterilenVeriler.length;
 
-  // Pasta Grafik (Kategori Dağılımı)
+  // --- YENİ: HEDEF HESAPLAMA (Sadece Bugün İçin Geçerli) ---
+  // Bugün yapılan toplam süreyi bulalım (Filtreden bağımsız)
+  const bugunTarih = new Date().toLocaleDateString();
+  const bugunYapilanToplam = Math.ceil(hamVeriler
+    .filter(v => v.tarih === bugunTarih)
+    .reduce((t, v) => t + v.suredk, 0));
+  
+  // Yüzde hesabı (En fazla %100 olabilir)
+  const hedefYuzdesi = Math.min((bugunYapilanToplam / GUNLUK_HEDEF_DK) * 100, 100);
+  const hedefRengi = hedefYuzdesi >= 100 ? '#4CAF50' : 'tomato'; // Tamamlanınca yeşil olsun
+
+  // Pasta Grafik
   const kategoriGruplari: any = {};
   gosterilenVeriler.forEach(veri => {
     if (!kategoriGruplari[veri.kategori]) kategoriGruplari[veri.kategori] = 0;
@@ -110,14 +110,14 @@ export default function RaporlarEkrani() {
     legendFontSize: 12
   }));
 
-  // Çubuk Grafik (Zaman Grafiği)
-  const sonKayitlar = gosterilenVeriler.slice(0, 7).reverse(); // Son 7 kayıt (Haftalık bakarken taşmasın diye)
+  // Çubuk Grafik
+  const sonKayitlar = gosterilenVeriler.slice(0, 7).reverse(); 
   const cubukGrafikVerisi = {
     labels: sonKayitlar.map(v => v.kategori.substring(0, 3)), 
     datasets: [{ data: sonKayitlar.map(v => Math.ceil(v.suredk)) }]
   };
 
-  // --- 5. GÖRÜNTÜ ---
+  // --- 4. GÖRÜNTÜ ---
   return (
     <ScrollView 
       style={styles.container}
@@ -125,7 +125,27 @@ export default function RaporlarEkrani() {
     >
       <Text style={styles.baslik}>Raporlar</Text>
 
-      {/* FİLTRE BUTONLARI (YENİ) */}
+      {/* --- YENİ: GÜNLÜK HEDEF KARTI --- */}
+      <View style={styles.hedefKarti}>
+        <View style={{flexDirection:'row', justifyContent:'space-between', marginBottom: 5}}>
+            <Text style={styles.hedefBaslik}>🔥 Günlük Hedef ({GUNLUK_HEDEF_DK} dk)</Text>
+            <Text style={[styles.hedefYuzde, {color: hedefRengi}]}>%{Math.floor(hedefYuzdesi)}</Text>
+        </View>
+        
+        {/* İlerleme Çubuğu Arka Planı */}
+        <View style={styles.progressBarBackground}>
+            {/* İlerleme Çubuğu Doluluğu */}
+            <View style={[styles.progressBarFill, { width: `${hedefYuzdesi}%`, backgroundColor: hedefRengi }]} />
+        </View>
+        
+        <Text style={styles.hedefAltYazi}>
+            {hedefYuzdesi >= 100 
+                ? "Tebrikler! Günlük hedefini tamamladın! 🏆" 
+                : `${GUNLUK_HEDEF_DK - bugunYapilanToplam} dakika daha çalışmalısın.`}
+        </Text>
+      </View>
+      {/* ---------------------------------- */}
+
       <View style={styles.filtreKutusu}>
         {['Bugün', 'Bu Hafta', 'Bu Ay'].map((f) => (
           <TouchableOpacity
@@ -140,7 +160,6 @@ export default function RaporlarEkrani() {
         ))}
       </View>
 
-      {/* ÖZET KARTLARI */}
       <Text style={styles.altBaslik}>{seciliFiltre} İstatistikleri</Text>
       <View style={styles.kartSatiri}>
         <View style={styles.kart}>
@@ -157,7 +176,6 @@ export default function RaporlarEkrani() {
         </View>
       </View>
 
-      {/* GRAFİKLER */}
       {toplamSeans > 0 ? (
         <>
           <Text style={styles.grafikBaslik}>Kategori Dağılımı ({seciliFiltre})</Text>
@@ -195,7 +213,6 @@ export default function RaporlarEkrani() {
         </View>
       )}
       
-      {/* SIFIRLAMA BUTONU */}
       <TouchableOpacity style={styles.temizleBtn} onPress={verileriTemizle}>
         <Text style={styles.temizleBtnYazi}>🗑️ Tüm Verileri Sil</Text>
       </TouchableOpacity>
@@ -224,7 +241,28 @@ const styles = StyleSheet.create({
   baslik: {
     fontSize: 28, fontWeight: 'bold', marginBottom: 20, marginTop: 30, color: '#333',
   },
-  // FİLTRE STİLLERİ
+  // --- YENİ HEDEF STİLLERİ ---
+  hedefKarti: {
+    backgroundColor: '#fff', borderRadius: 15, padding: 15, marginBottom: 25,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3,
+    borderWidth: 1, borderColor: '#f0f0f0'
+  },
+  hedefBaslik: {
+    fontSize: 16, fontWeight: 'bold', color: '#444'
+  },
+  hedefYuzde: {
+    fontSize: 16, fontWeight: 'bold'
+  },
+  progressBarBackground: {
+    height: 12, backgroundColor: '#eee', borderRadius: 6, width: '100%', overflow: 'hidden', marginBottom: 8
+  },
+  progressBarFill: {
+    height: '100%', borderRadius: 6
+  },
+  hedefAltYazi: {
+    fontSize: 12, color: '#888', fontStyle: 'italic'
+  },
+  // ---------------------------
   filtreKutusu: {
     flexDirection: 'row', backgroundColor: '#f0f0f0', borderRadius: 10, padding: 4, marginBottom: 20,
   },
@@ -244,7 +282,6 @@ const styles = StyleSheet.create({
   altBaslik: {
     fontSize: 16, fontWeight: '600', color: '#666', marginBottom: 10,
   },
-  // KART STİLLERİ
   kartSatiri: {
     flexDirection: 'row', justifyContent: 'space-between', marginBottom: 30,
   },

@@ -1,12 +1,23 @@
+import { Ionicons } from '@expo/vector-icons'; // İkon için
+import AsyncStorage from '@react-native-async-storage/async-storage'; // Hedefi kaydetmek için
 import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useState } from 'react';
-import { Alert, Dimensions, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+	Alert,
+	Dimensions,
+	Modal,
+	RefreshControl,
+	ScrollView,
+	StyleSheet,
+	Text,
+	TextInput,
+	TouchableOpacity,
+	View
+} from 'react-native';
 import { BarChart, PieChart } from 'react-native-chart-kit';
 import { herseyiSil, OdakVerisi, verileriGetir } from '../utils/storage';
 
 const ekranGenisligi = Dimensions.get("window").width;
-const GUNLUK_HEDEF_DK = 120; // Hedef: Günde 2 Saat (Burayı değiştirebilirsin)
-
 type ZamanAraligi = 'Bugün' | 'Bu Hafta' | 'Bu Ay';
 
 export default function RaporlarEkrani() {
@@ -15,12 +26,30 @@ export default function RaporlarEkrani() {
   const [seciliFiltre, setSeciliFiltre] = useState<ZamanAraligi>('Bugün');
   const [yukleniyor, setYukleniyor] = useState(false);
 
-  // --- 1. VERİLERİ YÜKLEME ---
+  // --- HEDEF AYARLARI (YENİ) ---
+  const [gunlukHedef, setGunlukHedef] = useState(120); // Varsayılan 120 dk
+  const [hedefModalAcik, setHedefModalAcik] = useState(false);
+  const [yeniHedefInput, setYeniHedefInput] = useState("120");
+
+  // --- 1. AÇILIŞTA VERİLERİ VE HEDEFİ YÜKLE ---
   useFocusEffect(
     useCallback(() => {
       verileriYukle();
+      hedefiYukle(); // Hedefi hafızadan çek
     }, [])
   );
+
+  const hedefiYukle = async () => {
+    try {
+      const kayitliHedef = await AsyncStorage.getItem('kullanici_hedefi');
+      if (kayitliHedef !== null) {
+        setGunlukHedef(parseInt(kayitliHedef));
+        setYeniHedefInput(kayitliHedef);
+      }
+    } catch (e) {
+      console.log("Hedef yüklenemedi");
+    }
+  };
 
   const verileriYukle = async () => {
     setYukleniyor(true);
@@ -30,7 +59,25 @@ export default function RaporlarEkrani() {
     setYukleniyor(false);
   };
 
-  // --- 2. FİLTRELEME ---
+  // --- 2. HEDEFİ KAYDETME FONKSİYONU ---
+  const hedefiKaydet = async () => {
+    const deger = parseInt(yeniHedefInput);
+    if (isNaN(deger) || deger <= 0) {
+      Alert.alert("Hata", "Lütfen geçerli bir dakika giriniz.");
+      return;
+    }
+    
+    setGunlukHedef(deger);
+    await AsyncStorage.setItem('kullanici_hedefi', deger.toString());
+    setHedefModalAcik(false);
+    Alert.alert("Başarılı", `Günlük hedefiniz ${deger} dakika olarak güncellendi! 🎯`);
+  };
+
+  const hazirHedefSec = (dk: number) => {
+    setYeniHedefInput(dk.toString());
+  };
+
+  // --- 3. FİLTRELEME ---
   const verileriSuz = (veriler: OdakVerisi[], filtre: ZamanAraligi) => {
     const bugun = new Date();
     bugun.setHours(0, 0, 0, 0); 
@@ -79,23 +126,21 @@ export default function RaporlarEkrani() {
     );
   };
 
-  // --- 3. İSTATİSTİK HESAPLAMALARI ---
+  // --- 4. İSTATİSTİKLER ---
   const toplamSure = Math.ceil(gosterilenVeriler.reduce((toplam, veri) => toplam + veri.suredk, 0));
   const toplamDagilma = gosterilenVeriler.reduce((toplam, veri) => toplam + veri.dagilma, 0);
   const toplamSeans = gosterilenVeriler.length;
 
-  // --- YENİ: HEDEF HESAPLAMA (Sadece Bugün İçin Geçerli) ---
-  // Bugün yapılan toplam süreyi bulalım (Filtreden bağımsız)
+  // Hedef Hesaplama
   const bugunTarih = new Date().toLocaleDateString();
   const bugunYapilanToplam = Math.ceil(hamVeriler
     .filter(v => v.tarih === bugunTarih)
     .reduce((t, v) => t + v.suredk, 0));
   
-  // Yüzde hesabı (En fazla %100 olabilir)
-  const hedefYuzdesi = Math.min((bugunYapilanToplam / GUNLUK_HEDEF_DK) * 100, 100);
-  const hedefRengi = hedefYuzdesi >= 100 ? '#4CAF50' : 'tomato'; // Tamamlanınca yeşil olsun
+  const hedefYuzdesi = Math.min((bugunYapilanToplam / gunlukHedef) * 100, 100);
+  const hedefRengi = hedefYuzdesi >= 100 ? '#4CAF50' : 'tomato'; 
 
-  // Pasta Grafik
+  // Grafikler
   const kategoriGruplari: any = {};
   gosterilenVeriler.forEach(veri => {
     if (!kategoriGruplari[veri.kategori]) kategoriGruplari[veri.kategori] = 0;
@@ -110,14 +155,13 @@ export default function RaporlarEkrani() {
     legendFontSize: 12
   }));
 
-  // Çubuk Grafik
   const sonKayitlar = gosterilenVeriler.slice(0, 7).reverse(); 
   const cubukGrafikVerisi = {
     labels: sonKayitlar.map(v => v.kategori.substring(0, 3)), 
     datasets: [{ data: sonKayitlar.map(v => Math.ceil(v.suredk)) }]
   };
 
-  // --- 4. GÖRÜNTÜ ---
+  // --- 5. GÖRÜNTÜ ---
   return (
     <ScrollView 
       style={styles.container}
@@ -125,27 +169,71 @@ export default function RaporlarEkrani() {
     >
       <Text style={styles.baslik}>Raporlar</Text>
 
-      {/* --- YENİ: GÜNLÜK HEDEF KARTI --- */}
+      {/* --- HEDEF KARTI --- */}
       <View style={styles.hedefKarti}>
-        <View style={{flexDirection:'row', justifyContent:'space-between', marginBottom: 5}}>
-            <Text style={styles.hedefBaslik}>🔥 Günlük Hedef ({GUNLUK_HEDEF_DK} dk)</Text>
+        <View style={{flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom: 5}}>
+            <View style={{flexDirection:'row', alignItems:'center', gap: 8}}>
+                <Text style={styles.hedefBaslik}>🔥 Günlük Hedef ({gunlukHedef} dk)</Text>
+                
+                {/* DÜZENLEME BUTONU */}
+                <TouchableOpacity onPress={() => setHedefModalAcik(true)}>
+                    <Ionicons name="pencil-sharp" size={18} color="#666" />
+                </TouchableOpacity>
+            </View>
             <Text style={[styles.hedefYuzde, {color: hedefRengi}]}>%{Math.floor(hedefYuzdesi)}</Text>
         </View>
         
-        {/* İlerleme Çubuğu Arka Planı */}
         <View style={styles.progressBarBackground}>
-            {/* İlerleme Çubuğu Doluluğu */}
             <View style={[styles.progressBarFill, { width: `${hedefYuzdesi}%`, backgroundColor: hedefRengi }]} />
         </View>
         
         <Text style={styles.hedefAltYazi}>
             {hedefYuzdesi >= 100 
                 ? "Tebrikler! Günlük hedefini tamamladın! 🏆" 
-                : `${GUNLUK_HEDEF_DK - bugunYapilanToplam} dakika daha çalışmalısın.`}
+                : `${Math.max(0, gunlukHedef - bugunYapilanToplam)} dakika daha çalışmalısın.`}
         </Text>
       </View>
-      {/* ---------------------------------- */}
 
+      {/* --- HEDEF DÜZENLEME MODALI (YENİ) --- */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={hedefModalAcik}
+        onRequestClose={() => setHedefModalAcik(false)}
+      >
+        <View style={styles.modalArkaPlan}>
+          <View style={styles.modalKutu}>
+            <Text style={styles.modalBaslik}>Hedefi Düzenle 🎯</Text>
+            <Text style={styles.modalAciklama}>Günlük kaç dakika odaklanmak istersin?</Text>
+            
+            <TextInput 
+                style={styles.input}
+                keyboardType="numeric"
+                value={yeniHedefInput}
+                onChangeText={setYeniHedefInput}
+                placeholder="Örn: 120"
+            />
+
+            {/* Hazır Butonlar */}
+            <View style={styles.hazirButonlar}>
+                <TouchableOpacity style={styles.hazirBtn} onPress={() => hazirHedefSec(60)}><Text>1 Saat</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.hazirBtn} onPress={() => hazirHedefSec(120)}><Text>2 Saat</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.hazirBtn} onPress={() => hazirHedefSec(180)}><Text>3 Saat</Text></TouchableOpacity>
+            </View>
+
+            <View style={styles.modalButonlar}>
+                <TouchableOpacity style={[styles.modalBtn, styles.iptalBtn]} onPress={() => setHedefModalAcik(false)}>
+                    <Text style={styles.iptalYazi}>İptal</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.modalBtn, styles.kaydetBtn]} onPress={hedefiKaydet}>
+                    <Text style={styles.kaydetYazi}>Kaydet</Text>
+                </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* --- FİLTRELER VE GRAFİKLER (AYNI) --- */}
       <View style={styles.filtreKutusu}>
         {['Bugün', 'Bu Hafta', 'Bu Ay'].map((f) => (
           <TouchableOpacity
@@ -241,7 +329,6 @@ const styles = StyleSheet.create({
   baslik: {
     fontSize: 28, fontWeight: 'bold', marginBottom: 20, marginTop: 30, color: '#333',
   },
-  // --- YENİ HEDEF STİLLERİ ---
   hedefKarti: {
     backgroundColor: '#fff', borderRadius: 15, padding: 15, marginBottom: 25,
     shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3,
@@ -262,7 +349,48 @@ const styles = StyleSheet.create({
   hedefAltYazi: {
     fontSize: 12, color: '#888', fontStyle: 'italic'
   },
-  // ---------------------------
+  // --- MODAL STİLLERİ ---
+  modalArkaPlan: {
+    flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)"
+  },
+  modalKutu: {
+    width: 300, backgroundColor: "white", borderRadius: 20, padding: 20, alignItems: "center",
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4, elevation: 5
+  },
+  modalBaslik: {
+    fontSize: 20, fontWeight: "bold", marginBottom: 10, color: '#333'
+  },
+  modalAciklama: {
+    fontSize: 14, color: '#666', marginBottom: 15
+  },
+  input: {
+    borderWidth: 1, borderColor: '#ddd', borderRadius: 10, width: '100%', padding: 10, fontSize: 18, textAlign: 'center', marginBottom: 15
+  },
+  hazirButonlar: {
+    flexDirection: 'row', gap: 10, marginBottom: 20
+  },
+  hazirBtn: {
+    backgroundColor: '#f0f0f0', padding: 10, borderRadius: 8
+  },
+  modalButonlar: {
+    flexDirection: 'row', width: '100%', justifyContent: 'space-between', gap: 10
+  },
+  modalBtn: {
+    flex: 1, padding: 12, borderRadius: 10, alignItems: 'center'
+  },
+  iptalBtn: {
+    backgroundColor: '#eee'
+  },
+  kaydetBtn: {
+    backgroundColor: 'tomato'
+  },
+  iptalYazi: {
+    color: '#333', fontWeight: 'bold'
+  },
+  kaydetYazi: {
+    color: '#fff', fontWeight: 'bold'
+  },
+  // --- DİĞER STİLLER ---
   filtreKutusu: {
     flexDirection: 'row', backgroundColor: '#f0f0f0', borderRadius: 10, padding: 4, marginBottom: 20,
   },

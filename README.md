@@ -57,12 +57,6 @@ Projeyi kendi bilgisayarınızda çalıştırmak için aşağıdaki adımları i
 4.  **Test Edin:**
     Expo Go uygulamasını telefonunuza indirin ve terminalde çıkan QR kodu okutun.
 
-## 📷 Ekran Görüntüleri
-
-| Sayaç Ekranı | Raporlar Ekranı |
-| :---: | :---: |
-| *(Buraya uygulamanın ekran görüntüsünü ekleyebilirsiniz)* | *(Buraya raporlar ekran görüntüsünü ekleyebilirsiniz)* |
-
 ---
-**Geliştirici:** [Adın Soyadın]
+**Geliştirici:** Veysel Aras
 **Ders:** Mobil Programlama

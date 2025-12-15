@@ -1,50 +1,68 @@
-# Welcome to your Expo app 👋
+# 🎯 Odaklanma Takip Uygulaması (Focus Tracker)
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Bu proje, React Native ve Expo kullanılarak geliştirilmiş, kullanıcıların odaklanma sürelerini yönetmelerine, istatistik tutmalarına ve dikkat dağınıklıklarını takip etmelerine yardımcı olan bir mobil uygulamadır.
 
-## Get started
+## 📱 Özellikler
 
-1. Install dependencies
+### 1. Zamanlayıcı ve Odaklanma (Ana Ekran)
+* **Esnek Süre Ayarı:** Slider (Kaydırma çubuğu) ile 1 dakikadan 120 dakikaya kadar hassas süre ayarı.
+* **Kategori Yönetimi:** "Ders Çalışma", "Kodlama", "Kitap Okuma" gibi kategoriler seçebilme.
+* **Görsel Sayaç:** Daire şeklinde ilerleyen, kalan süreyi ve durumu gösteren sayaç.
+* **Ses ve Titreşim:** Süre bittiğinde kullanıcıyı uyaran sesli bildirim ve titreşim desteği.
+* **Ekran Uyanık Kalma:** Sayaç çalışırken ekranın kapanmasını engelleyen `KeepAwake` entegrasyonu.
 
-   ```bash
-   npm install
-   ```
+### 2. Dikkat Dağınıklığı Takibi (App State)
+* Kullanıcı sayaç çalışırken uygulamadan çıkarsa (arka plana atarsa), uygulama bunu **"Dikkat Dağınıklığı"** olarak algılar.
+* Her çıkış yapıldığında sayaç otomatik durur ve kullanıcıya uyarı verir.
+* Seans sonunda toplam kaç kez dikkatin dağıldığı raporlanır.
 
-2. Start the app
+### 3. Veri Kaydı ve Raporlar (İstatistik Ekranı)
+* **Kalıcı Hafıza:** Tüm veriler `AsyncStorage` kullanılarak telefon hafızasına kaydedilir. Uygulama kapatılsa bile veriler silinmez.
+* **Filtreleme:** Veriler "Bugün", "Bu Hafta" ve "Bu Ay" olarak filtrelenebilir.
+* **Grafikler:**
+    * **Pasta Grafik:** Odaklanma sürelerinin kategorilere göre dağılımı.
+    * **Çubuk Grafik:** Son seansların süre bazlı karşılaştırması.
+* **Günlük Hedef Sistemi:** Kullanıcı kendine günlük bir hedef (örn: 120 dk) belirleyebilir. İlerleme çubuğu ile hedefe ne kadar kaldığını takip edebilir.
 
-   ```bash
-   npx expo start
-   ```
+## 🛠️ Kullanılan Teknolojiler ve Kütüphaneler
 
-In the output, you'll find options to open the app in a
+* **React Native & Expo:** Proje altyapısı.
+* **TypeScript:** Tip güvenliği ve hatasız kodlama için.
+* **AsyncStorage:** Verilerin kalıcı olarak saklanması için.
+* **React Native Chart Kit:** İstatistiksel grafikler için.
+* **Expo AV & Vibration:** Ses ve titreşim geri bildirimleri için.
+* **Expo Keep Awake:** Odaklanma sırasında ekranın açık kalması için.
+* **React Native Community Slider:** Süre seçimi için.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## 🚀 Kurulum ve Çalıştırma
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+Projeyi kendi bilgisayarınızda çalıştırmak için aşağıdaki adımları izleyin:
 
-## Get a fresh project
+1.  **Projeyi İndirin:**
+    ```bash
+    git clone <repo-url>
+    cd <proje-adi>
+    ```
 
-When you're ready, run:
+2.  **Paketleri Yükleyin:**
+    ```bash
+    npm install
+    ```
 
-```bash
-npm run reset-project
-```
+3.  **Uygulamayı Başlatın:**
+    ```bash
+    npx expo start -c
+    ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+4.  **Test Edin:**
+    Expo Go uygulamasını telefonunuza indirin ve terminalde çıkan QR kodu okutun.
 
-## Learn more
+## 📷 Ekran Görüntüleri
 
-To learn more about developing your project with Expo, look at the following resources:
+| Sayaç Ekranı | Raporlar Ekranı |
+| :---: | :---: |
+| *(Buraya uygulamanın ekran görüntüsünü ekleyebilirsiniz)* | *(Buraya raporlar ekran görüntüsünü ekleyebilirsiniz)* |
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+---
+**Geliştirici:** [Adın Soyadın]
+**Ders:** Mobil Programlama
